@@ -48,7 +48,7 @@ def calculate_mask_coverage(points_seen, instance_mask):
         
         mask_observed_per_frame = np.any(mask_points_seen != 0, axis=0)  
         
-        import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()
         coverage = np.sum(mask_observed_per_frame) / unique_masks.shape[0] * 100
         mask_coverage[mask_id] = coverage
 
@@ -142,7 +142,7 @@ class SAM2OBJECTBase:
         self.args = args
         self.view_freq = args.view_freq
         self.dis_decay = args.dis_decay
-        self.key_path = args.key_path
+        # self.key_path = args.key_path
 
 
     def query_2d_point(self, seg_id, frame_idx, color_pixes, vis_img_path, save_path):
@@ -292,7 +292,7 @@ class SAM2OBJECTBase:
             initial_labels = np.arange(self.N, dtype=int) + 1
             self.seg_ids, self.seg_num, self.seg_members, self.seg_direct_neighbors = self.get_seg_data(
                 # base_dir=self.base_dir,
-                base_dir='/Your/Path/To/Your/ScanNet',  # Change this to your data directory
+                base_dir='/Dataset/ScanNet',  # Change this to your data directory
                 scene_id=self.scene_id,
                 max_neighbor_distance=1,
                 seg_ids=initial_labels,
@@ -650,7 +650,7 @@ class SAM2OBJECTBase:
             distance,
             self.max_neighbor_distance, 
             similar_meric,
-            self.args.thres_trunc,
+            thres_trunc=self.args.thres_trunc,
             multi_view=True)  # (N, N)
 
         adjacency_mat, adj_2 = self.get_seg_adjacency_from_similar_confidence(
@@ -720,21 +720,26 @@ class SAM2OBJECTBase:
 
         if self.args.use_torch:
             if multi_view:
-                similar_sum, confidence_sum, multiview_similar = utils.torch_get_similar_confidence_matrix_multiview_2(
-                    seg_neighbors, seg_ids,
-                    seg_seen0, seg_distance0, points_label,
+                similar_sum, confidence_sum, multiview_similar = utils.torch_get_similar_confidence_matrix_multiview(
+                    seg_neighbors, 
+                    seg_ids,
+                    seg_seen0, 
+                    # seg_distance0, 
+                    points_label,
                     similar_metric,
                     seg_label_seen0,
-                    thres_trunc,
+                    thres_trunc=thres_trunc,
                     multi_view=multi_view,
-                    key_list_path=self.key_path
+                    # key_list_path=self.key_path
                     )
             else:
-                similar_sum, confidence_sum = utils.torch_get_similar_confidence_matrix_multiview_2(
-                    seg_neighbors, seg_ids,
-                    seg_seen0, points_label,
+                similar_sum, confidence_sum = utils.torch_get_similar_confidence_matrix_multiview(
+                    seg_neighbors, 
+                    seg_ids,
+                    seg_seen0, 
+                    points_label,
                     similar_metric,
-                    thres_trunc,
+                    thres_trunc=thres_trunc,
                     multi_view=multi_view
                     )
         else:

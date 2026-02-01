@@ -145,7 +145,7 @@ class ScanNet_SAM2OBJECT(SAM2OBJECTBase):
                 # load superpoint ids from json file
                 if not self.scannetpp:
                     scene_seg_path = \
-                        join('/YourScanNetPath', 'scans', scene_id, f'{scene_id}_vh_clean_2.0.010000.segs.json')
+                        join('/Dataset/ScanNet', 'scans', scene_id, f'{scene_id}_vh_clean_2.0.010000.segs.json')
                     with open(scene_seg_path, 'r') as f:
                         seg_data = json.load(f)
                     seg_ids = np.array(seg_data['segIndices'])
@@ -215,7 +215,7 @@ def everything_seg(args):
             os.makedirs(join(args.base_dir, 'scans', args.scene_id), exist_ok=True)
             points_path = join(dirname(join(args.base_dir, 'scans', args.scene_id, 'mesh_aligned_0.05.ply')), 'points.pts')
         else:
-            ply_path = join('/YourScanNetPath/scans', args.scene_id, f'{args.scene_id}_vh_clean_2.ply')
+            ply_path = join('//Dataset/ScanNet/scans', args.scene_id, f'{args.scene_id}_vh_clean_2.ply')
             # ply_path = join(args.base_dir, 'scans', args.scene_id, f'{args.scene_id}_vh_clean_2.ply')
         # points_path = join(dirname(ply_path), 'points.pts')
             os.makedirs(join(args.base_dir, 'scans', args.scene_id), exist_ok=True)
@@ -244,6 +244,28 @@ def everything_seg(args):
                                                 vis_dis=args.thres_dis,
                                                 max_neighbor_distance=args.max_neighbor_distance, 
                                                 similar_metric=args.similar_metric)
+
+    # objectness score for each point, indicating whether it belongs to foreground object. Here we just use 1 for all points
+    objness = np.ones(points.shape[0])
+    with CodeTimer('Save results', dict_collect=time_collection):
+        # ==== save point cloud or mesh ====
+        # (x, y, z, objectness, labels_fine)
+        points_objness_label = np.concatenate((points, objness[:, None], labels_fine_global[:, None]), -1)
+        # construct name for saving file
+        save_name = utils.construct_saving_name(args)
+        # save_path = join(save_dir, save_name)
+        # np.savetxt(save_path, points_objness_label)
+        # print(f'save to {save_path}')
+        # save_points_objnes_labels_to_mesh(save_path, args.scene_id, args.scannetpp)
+        # ==== save for numerical evaluation ====
+        export_merged_ids_for_eval(
+            labels_fine_global, args.eval_dir, args, label_ids_dir=None)
+
+    print('fine labels num:', np.unique(labels_fine_global).shape[0])
+
+    for k, v in time_collection.items():
+        print(f'Time {k}: {v:.1f}')
+    print(f'Total time: {sum(time_collection.values()):.1f}')
 
     
 def ransac_plane_seg(points, pred_ins, floor_id, scene_dist_thres):
@@ -377,8 +399,8 @@ def export_scannetpp_eval(inst_gt,
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--base_dir', type=str,
-                        default='/YourScanNetPath', help='path to scannet dataset')
-    parser.add_argument('--scene_id', type=str, default=None)
+                        default='/Dataset/ScanNet', help='path to scannet dataset')
+    parser.add_argument('--scene_id', type=str, default='scene0568_00')
     parser.add_argument('--mask_name', type=str, default='semantic-sam',
                         help='which group of mask to use(fast-sam, sam-hq...)')
     parser.add_argument('--test', default=False, action='store_true',

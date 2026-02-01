@@ -23,7 +23,7 @@ We present SAM2Object, a novel zero-shot 3D instance segmentation method that ef
 
 Prepare environment:
 
-```bash
+<!-- ```bash
 conda create -n sam2object python=3.8
 conda activate sam2object
 pip install torch==2.1.0 torchvision==0.16.0 torchaudio==2.1.0 --index-url https://download.pytorch.org/whl/cu121
@@ -37,9 +37,17 @@ Download the pretrained SAM 2 checkpoints:
 ```bash
 cd segtrack/checkpoints
 bash download_ckpts.sh
+``` -->
+
+```bash
+conda create -n sam2object python=3.10
+conda activate sam2object
+pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu121
+pip install open3d natsort matplotlib tqdm opencv-python scipy plyfile supervision huggingface_hub
+# Install SAM2
+cd segtrack
+pip install -e .
 ```
-
-
 
 
 ### Data Preparation

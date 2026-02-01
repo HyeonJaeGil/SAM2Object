@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from PIL import Image
 from sam2.build_sam import build_sam2_video_predictor, build_sam2
 from sam2.sam2_image_predictor import SAM2ImagePredictor
+from sam2.sam2_video_predictor import SAM2VideoPredictor
 from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
 
 from utils.track_utils import sample_points_from_masks
@@ -75,19 +76,29 @@ def insert_average(sorted_list, thres=150):
     result.append(sorted_list[-1])  
     return result
 
-sam2_checkpoint = "/Your_Path/SAM2Object/segtrack/checkpoints/sam2_hiera_large.pt"
-model_cfg = "sam2_hiera_l.yaml"
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print("device", device)
 
-video_predictor = build_sam2_video_predictor(model_cfg, sam2_checkpoint)
-video_predictor_rev = build_sam2_video_predictor(model_cfg, sam2_checkpoint)
-sam2_image_model = build_sam2(model_cfg, sam2_checkpoint, device=device)
-image_predictor = SAM2ImagePredictor(sam2_image_model)
+video_predictor_device="cuda:1"
+video_predictor_rev_device="cuda:2"
+mask_generator_device="cuda:3"
 
-mask_generator = SAM2AutomaticMaskGenerator(
-    model=sam2_image_model,
+video_predictor = SAM2VideoPredictor.from_pretrained(
+    "facebook/sam2-hiera-large",
+    offload_video_to_cpu=True,
+    offload_state_to_cpu=True,
+    device=video_predictor_device,
+)
+video_predictor_rev = SAM2VideoPredictor.from_pretrained(
+    "facebook/sam2-hiera-large",
+    offload_video_to_cpu=True,
+    offload_state_to_cpu=True,
+    device=video_predictor_rev_device,
+)
+mask_generator = SAM2AutomaticMaskGenerator.from_pretrained(
+    "facebook/sam2-hiera-large",
     points_per_side=64,
+    points_per_batch=16,
     pred_iou_thresh=0.7,
     stability_score_thresh=0.92,
     stability_score_offset=0.7,
@@ -97,16 +108,29 @@ mask_generator = SAM2AutomaticMaskGenerator(
     min_mask_region_area=25.0,
     use_m2m=True,
     multimask_output=False,
+    device=mask_generator_device,
 )
 
-with open('scannet_scene_val.txt', 'r') as file:
+with open('scannet_scene_val_mini.txt', 'r') as file:
     data_list = [line.strip() for line in file.readlines()]
+# data_list = ["scene0568_00"]
+data_list = [
+    'scene0011_00',
+    # 'scene0030_00', # OOM
+    'scene0046_00',
+    'scene0086_00',
+    'scene0222_00', # OOM
+    'scene0378_00',
+    'scene0389_00',
+    'scene0435_00,'
+]
+
 video_dir_scene_ids = data_list
 for scene_id in video_dir_scene_ids:
 
-    video_dir = opj("/Your_ScanNet_Path/color_images_cluster", scene_id)
+    video_dir = opj("/Dataset/ScanNet/color_images_cluster", scene_id)
 
-    output_dir = opj("/Your_Path/SAM2Object/segtrack/outputs",scene_id)
+    output_dir = opj("/root/workspace/SAM2Object/segtrack/outputs",scene_id)
     if os.path.exists(opj(output_dir, "result_merge")):
         continue
     CommonUtils.creat_dirs(output_dir)
@@ -121,6 +145,10 @@ for scene_id in video_dir_scene_ids:
     result_dir_rev = os.path.join(output_dir, "result_rev")
     CommonUtils.creat_dirs(mask_data_dir_rev)
     CommonUtils.creat_dirs(json_data_dir_rev)
+    
+    amg_cache_dir = os.path.join(output_dir, "amg_cache")
+    CommonUtils.creat_dirs(amg_cache_dir)
+    
     frame_names = [
         p for p in os.listdir(video_dir)
         if os.path.splitext(p)[-1] in [".jpg", ".jpeg", ".JPG", ".JPEG", ".png", ".PNG"]
@@ -129,7 +157,6 @@ for scene_id in video_dir_scene_ids:
 
     # init video predictor state
     inference_state = video_predictor.init_state(video_path=video_dir, offload_video_to_cpu=True, async_loading_frames=True)
-    inference_state_rev = video_predictor_rev.init_state(video_path=video_dir, offload_video_to_cpu=True, async_loading_frames=True)
 
     sam2_masks = MaskDictionaryModel()
     PROMPT_TYPE_FOR_VIDEO = "mask" # box, mask or point
@@ -154,6 +181,28 @@ for scene_id in video_dir_scene_ids:
     with open(opj(output_dir, "key_list", "key_list.txt"), 'w') as f:
         f.write(', '.join(map(str, keyframe_idx_list)))
 
+
+    # run amg first
+    for idx in range(len(keyframe_idx_list) - 1):
+        start_frame_idx = keyframe_idx_list[idx]
+        img_path = os.path.join(video_dir, frame_names[start_frame_idx])
+        image = Image.open(img_path)
+        image_base_name = frame_names[start_frame_idx].split(".")[0]
+        amg_cache_path = os.path.join(amg_cache_dir, f"amg_{image_base_name}.pkl,gz")
+        if os.path.exists(amg_cache_path):
+            continue
+        imagergb = np.array(image.convert("RGB"))
+        masks = mask_generator.generate(np.array(image.convert("RGB")))
+        import gzip
+        import pickle
+        with gzip.open(amg_cache_path, "wb") as f:
+            pickle.dump(masks, f, protocol=pickle.HIGHEST_PROTOCOL)
+    
+    # # delete gpu memory
+    # del mask_generator.predictor
+    # del mask_generator
+    # torch.cuda.empty_cache()
+
     """
     Step 2.1: Prompt SAM image predictor to get the mask for all frames
     """
@@ -172,7 +221,11 @@ for scene_id in video_dir_scene_ids:
         mask_dict = MaskDictionaryModel(promote_type = PROMPT_TYPE_FOR_VIDEO, mask_name = f"mask_{image_base_name}.npy")
         imagergb = np.array(image.convert("RGB"))
 
-        masks = mask_generator.generate(np.array(image.convert("RGB")))
+        amg_cache_path = os.path.join(amg_cache_dir, f"amg_{image_base_name}.pkl,gz")
+        import gzip
+        import pickle
+        with gzip.open(amg_cache_path, "rb") as f:
+            masks = pickle.load(f)
 
         """
         Step 3: Register each object's positive points to video predictor
@@ -203,6 +256,7 @@ for scene_id in video_dir_scene_ids:
 
         # Propagate for a short interval every diff_step frames
         video_segments = {}  # output the following {step} frames tracking masks
+        print(f"propagate max_frame_num_to_track: {diff_step}, start_frame_idx: {start_frame_idx}")
         for out_frame_idx, out_obj_ids, out_mask_logits in video_predictor.propagate_in_video(inference_state, 
                                                                                             max_frame_num_to_track=diff_step, 
                                                                                             start_frame_idx=start_frame_idx
@@ -224,7 +278,7 @@ for scene_id in video_dir_scene_ids:
                 video_segments_all[out_frame_idx] = frame_masks
             sam2_masks = copy.deepcopy(frame_masks)
 
-        print("video_segments:", len(video_segments))
+        print("video_segments:", len(video_segments), list(video_segments.keys()))
 
         """
         Step 5: One stage save the tracking masks and json files
@@ -246,7 +300,7 @@ for scene_id in video_dir_scene_ids:
             mask_img = mask_img.numpy().astype(np.uint16)
             np.save(os.path.join(mask_data_dir, frame_masks_info.mask_name), mask_img)
             cv2.imwrite(os.path.join(
-                mask_data_dir, f'maskraw_{frame_idx}.png'), mask_img)
+                mask_data_dir, f'maskraw_{frame_idx:05d}.png'), mask_img)
             
             json_data = frame_masks_info.to_dict()
             json_data_path = os.path.join(json_data_dir, frame_masks_info.mask_name.replace(".npy", ".json"))
@@ -259,7 +313,19 @@ for scene_id in video_dir_scene_ids:
     del sam2_masks
     del mask_dict
     del video_segments
-
+    # del video_predictor
+    
+    
+    # video_predictor_rev = SAM2VideoPredictor.from_pretrained(
+    #     "facebook/sam2-hiera-large",
+    #     offload_video_to_cpu=True,
+    #     offload_state_to_cpu=True,
+    #     device=video_predictor_rev_device,
+    # )
+    inference_state_rev = video_predictor_rev.init_state(video_path=video_dir, offload_video_to_cpu=True, async_loading_frames=True, reverse=True)
+    # # (LAST HERE) test: reverse order of images in inference state rev
+    # # images are tensor of N, 3, H, W 
+    # inference_state_rev["images"] = torch.flip(inference_state_rev["images"], [0])
 
     frame_names_rev = [
         p for p in os.listdir(video_dir)
@@ -310,6 +376,13 @@ for scene_id in video_dir_scene_ids:
                 image = Image.open(img_path)
                 imagergb = np.array(image.convert("RGB"))
                 masks = mask_generator.generate(imagergb)
+                amg_cache_path = os.path.join(amg_cache_dir, f"amg_{image_base_name}.pkl,gz")
+                # save amg cache
+                import gzip
+                import pickle
+                with gzip.open(amg_cache_path, "wb") as f:
+                    pickle.dump(masks, f, protocol=pickle.HIGHEST_PROTOCOL)
+                    
                 # segmentation_arrays = [item['segmentation'] for item in masks]
                 # segmentation_3d_array = np.array(segmentation_arrays)
                 # masks = segmentation_3d_array.astype(np.float32)
@@ -340,6 +413,7 @@ for scene_id in video_dir_scene_ids:
             
 
             video_segments = {}  # output the following {step} frames tracking masks
+            print(f"propagate max_frame_num_to_track: {differences_rev[diff_idx]}, start_frame_idx: {len(frame_names_rev)-1-start_frame_idx}")
             for out_frame_idx, out_obj_ids, out_mask_logits in video_predictor_rev.propagate_in_video(inference_state_rev, 
                                                                                                     max_frame_num_to_track=differences_rev[diff_idx], 
                                                                                                     start_frame_idx=len(frame_names_rev)-1-start_frame_idx
@@ -358,6 +432,10 @@ for scene_id in video_dir_scene_ids:
 
                 video_segments[image_base_name] = frame_masks
                 sam2_masks_rev = copy.deepcopy(frame_masks)
+
+            # todo: check here
+            # why video segment's value is different from before?
+            print("video_segments:", len(video_segments), list(video_segments.keys()))
         
             diff_idx += 1
             for frame_idx, frame_masks_info in video_segments.items():

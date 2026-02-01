@@ -177,6 +177,7 @@ def load_video_frames(
     img_mean=(0.485, 0.456, 0.406),
     img_std=(0.229, 0.224, 0.225),
     async_loading_frames=False,
+    reverse=False,
     compute_device=torch.device("cuda"),
 ):
     """
@@ -193,6 +194,7 @@ def load_video_frames(
             offload_video_to_cpu=offload_video_to_cpu,
             img_mean=img_mean,
             img_std=img_std,
+            reverse=reverse,
             compute_device=compute_device,
         )
     elif is_str and os.path.isdir(video_path):
@@ -202,6 +204,7 @@ def load_video_frames(
             offload_video_to_cpu=offload_video_to_cpu,
             img_mean=img_mean,
             img_std=img_std,
+            reverse=reverse,
             async_loading_frames=async_loading_frames,
             compute_device=compute_device,
         )
@@ -285,6 +288,7 @@ def load_video_frames_from_jpg_images(
     offload_video_to_cpu,
     img_mean=(0.485, 0.456, 0.406),
     img_std=(0.229, 0.224, 0.225),
+    reverse=False,
     async_loading_frames=False,
     compute_device=torch.device("cuda"),
 ):
@@ -315,6 +319,8 @@ def load_video_frames_from_jpg_images(
         if os.path.splitext(p)[-1] in [".jpg", ".jpeg", ".JPG", ".JPEG"]
     ]
     frame_names.sort(key=lambda p: int(os.path.splitext(p)[0]))
+    if reverse:
+        frame_names = frame_names[::-1]
     num_frames = len(frame_names)
     if num_frames == 0:
         raise RuntimeError(f"no images found in {jpg_folder}")
@@ -352,6 +358,7 @@ def load_video_frames_from_video_file(
     offload_video_to_cpu,
     img_mean=(0.485, 0.456, 0.406),
     img_std=(0.229, 0.224, 0.225),
+    reverse=False,
     compute_device=torch.device("cuda"),
 ):
     """Load the video frames from a video file."""
@@ -366,6 +373,8 @@ def load_video_frames_from_video_file(
     images = []
     for frame in decord.VideoReader(video_path, width=image_size, height=image_size):
         images.append(frame.permute(2, 0, 1))
+    if reverse:
+        images = images[::-1]
 
     images = torch.stack(images, dim=0).float() / 255.0
     if not offload_video_to_cpu:

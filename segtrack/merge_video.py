@@ -99,11 +99,9 @@ def merge_two_video(mask_data_dir, mask_data_dir_rev, key_list):
                     order_frame[reorder_indices] = id_mapper.map_id(u_v)
 
             
-            
-            np.save(os.path.join(mergesave_mask_dir, "mask_"+str(in_idx)+'.npy'), order_frame)
+            np.save(os.path.join(mergesave_mask_dir, f"mask_{in_idx:05d}.npy"), order_frame)
             cv2.imwrite(os.path.join(
-                mergesave_mask_dir, f'maskraw_{in_idx}.png'), order_frame)
-        
+                mergesave_mask_dir, f'maskraw_{in_idx:05d}.png'), order_frame)
             u_values = np.unique(order_frame)
             tmp_dict = {}
             for u_value in u_values:
@@ -121,13 +119,13 @@ def merge_two_video(mask_data_dir, mask_data_dir_rev, key_list):
                 tmp_dict[str(u_value)] = t_dict
 
             dict_tmp = {
-                "mask_name": "mask_"+str(in_idx)+'.npy',
+                "mask_name": f"mask_{in_idx:05d}.npy",
                 "mask_height": 968,
                 "mask_width": 1296,
                 "promote_type": "mask",
                 "labels": tmp_dict
             }
-            json_data_path = os.path.join(mergesave_json_dir, "mask_"+str(in_idx)+'.npy'.replace(".npy", ".json"))
+            json_data_path = os.path.join(mergesave_json_dir, f"mask_{in_idx:05d}.json")
             with open(json_data_path, "w") as f:
                 json.dump(dict_tmp, f)
 

@@ -5,15 +5,17 @@ MAX_NEIGHBOR_DISTANCE=2    # farthest distance to take neighbors into account
 THRES_MERGE=200 #400           # merge small groups with less than THRES_MERGE points during post-processing
 DIS_DECAY=0.5              # decay rate of the distance weight
 SIMILAR_METRIC="2-norm"    # metric for similarity measurement
-MASK_NAME="semantic-sam"   # mask name for loading mask
+# MASK_NAME="semantic-sam"   # mask name for loading mask
+MASK_NAME="segtrack"
 ALIAS_MASK_NAME="semantic-sam"   # mask name for saving results
 
 
 TEXT_HEAD="scannet"
 TEXT="${TEXT_HEAD}_${VIEW_FREQ}view"
-HEAD="${TEXT_HEAD}_${VIEW_FREQ}view_merge${THRES_MERGE}_${SIMILAR_METRIC}_${ALIAS_MASK_NAME}_connect${THRES_CONNECT}_depth${MAX_NEIGHBOR_DISTANCE}"
+# HEAD="${TEXT_HEAD}_${VIEW_FREQ}view_merge${THRES_MERGE}_${SIMILAR_METRIC}_${ALIAS_MASK_NAME}_connect${THRES_CONNECT}_depth${MAX_NEIGHBOR_DISTANCE}"
+HEAD="${TEXT_HEAD}_${MASK_NAME}"
 # EVAL_DIR="data/ScanNet/results/${HEAD}"   # directory to export results
-EVAL_DIR="/YourPath/results/${HEAD}"   # directory to export results
+EVAL_DIR="/Dataset/ScanNet/results/${HEAD}"   # directory to export results
 
 python sam2object.py \
  --thres_merge=$THRES_MERGE \

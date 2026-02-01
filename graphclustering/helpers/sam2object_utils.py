@@ -1279,8 +1279,8 @@ def get_scannet_depth(color_path):
 
 
 def get_scannet_color_and_depth_intrinsic(color_path):
-    color_intrinsic_path = join(dirname(color_path), 'intrinsics_color.txt')
-    depth_intrinsic_path = join(dirname(color_path), 'intrinsics_depth.txt')
+    color_intrinsic_path = join(dirname(color_path), 'intrinsic_color.txt')
+    depth_intrinsic_path = join(dirname(color_path), 'intrinsic_depth.txt')
 
     color_intrinsic = np.loadtxt(color_intrinsic_path).astype(np.float32)[:3, :3]
     depth_intrinsic = np.loadtxt(depth_intrinsic_path).astype(np.float32)[:3, :3]
@@ -1289,7 +1289,7 @@ def get_scannet_color_and_depth_intrinsic(color_path):
 
 
 def get_scannet_mask(color_path, base_dir, scene_id, mask_group_name):
-    mask_dir = join(base_dir, '2D_masks_sotabest', scene_id, mask_group_name)
+    mask_dir = join(base_dir, '2D_masks', scene_id, mask_group_name)
     color_name = basename(color_path)
     mask_name = 'maskraw_' + color_name.replace('jpg', 'png')
     mask_path = join(mask_dir, mask_name)
@@ -1303,7 +1303,7 @@ def get_scannet_mask(color_path, base_dir, scene_id, mask_group_name):
 
 def get_scannet_semantic_mask(color_path, base_dir, scene_id, is_scannet200):
     if (not is_scannet200):
-        mask_dir = join(base_dir, '2D_masks_sotabest', scene_id, 'ovseg')
+        mask_dir = join(base_dir, '2D_masks', scene_id, 'ovseg')
     else:
         mask_dir = join(base_dir, '2D_masks', scene_id, 'ovseg200')
     color_name = basename(color_path)

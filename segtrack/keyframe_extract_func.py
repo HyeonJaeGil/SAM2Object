@@ -117,7 +117,7 @@ def extract_keyframes(frame_path,
             frames.append(frame)
         prev_frame = curr_frame
         i = i + 1
-    print("frame_num:{}",i) 
+    print("frame_num: ",i) 
     
     # compute keyframe
     keyframe_id_set = set()
